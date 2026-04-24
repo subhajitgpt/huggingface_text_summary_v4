@@ -10,20 +10,6 @@ from hf_text_summary.analysis import (
 )
 
 
-DEFAULT_INTENT_LABELS = [
-    "requesting information",
-    "task request",
-    "complaint",
-    "feedback",
-    "bug report",
-    "purchase inquiry",
-    "meeting scheduling",
-    "status update",
-    "follow-up",
-    "other",
-]
-
-
 def _read_text(path: str | None) -> str:
     if not path or path == "-":
         return sys.stdin.read()
@@ -51,6 +37,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Skip intent detection (fastest).",
     )
     ap.add_argument(
+        "--intent-mode",
+        default="generate",
+        choices=["generate", "zero-shot", "auto"],
+        help="Intent detection mode. 'generate' creates a short label from text; 'zero-shot' requires --intent-label.",
+    )
+    ap.add_argument(
         "--intent-label",
         action="append",
         dest="intent_labels",
@@ -60,7 +52,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     text = _read_text(args.file)
-    labels = args.intent_labels or DEFAULT_INTENT_LABELS
+    labels = args.intent_labels or []
+    enable_intent = not args.no_intent
 
     result = analyze_text(
         text,
@@ -71,8 +64,9 @@ def main(argv: list[str] | None = None) -> int:
         summary_max_length=args.max_len,
         summary_refine_final=not args.no_refine,
         keyphrase_top_k=args.phrases,
-        enable_intent=not args.no_intent,
+        enable_intent=enable_intent,
         intent_labels=labels,
+        intent_mode=args.intent_mode,
     )
 
     print("SUMMARY\n------")
@@ -83,7 +77,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print("\nINTENT\n------")
     if result.intent_top:
-        print(f"{result.intent_top.label} ({result.intent_top.score:.3f})")
+        if result.intent_top.score is None:
+            print(f"{result.intent_top.label}")
+        else:
+            print(f"{result.intent_top.label} ({result.intent_top.score:.3f})")
     else:
         print("<none>")
 

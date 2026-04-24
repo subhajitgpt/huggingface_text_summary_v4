@@ -1,0 +1,7 @@
+[theme]
+base = "light"
+# Noticeable but still soft light-blue background
+backgroundColor = "#EAF4FF"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#111827"
+font = "sans serif"

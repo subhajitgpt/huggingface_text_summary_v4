@@ -28,27 +28,22 @@ if __name__ == "__main__" and not _running_in_streamlit():
     )
 
 try:
-    from hf_text_summary import analyze_text, DEFAULT_INTENT_MODEL, DEFAULT_SUMMARY_MODEL
+    from hf_text_summary import (
+        analyze_text,
+        DEFAULT_DYNAMIC_INTENT_MODEL,
+        DEFAULT_SUMMARY_MODEL,
+    )
 except ModuleNotFoundError:
     # Allows `streamlit run app.py` without requiring an editable install.
     import sys
 
     sys.path.append(str(Path(__file__).parent / "src"))
-    from hf_text_summary import analyze_text, DEFAULT_INTENT_MODEL, DEFAULT_SUMMARY_MODEL
+    from hf_text_summary import (
+        analyze_text,
+        DEFAULT_DYNAMIC_INTENT_MODEL,
+        DEFAULT_SUMMARY_MODEL,
+    )
 
-
-DEFAULT_INTENT_LABELS = [
-    "requesting information",
-    "task request",
-    "complaint",
-    "feedback",
-    "bug report",
-    "purchase inquiry",
-    "meeting scheduling",
-    "status update",
-    "follow-up",
-    "other",
-]
 
 SAMPLE_TEXT = """\
 Our mobile app started crashing after yesterday's update. Users report that it closes immediately when opening the Settings screen.\
@@ -57,86 +52,87 @@ This seems to happen on Android 14 devices, especially on Pixel phones. We need 
 
 Can you investigate the logs, identify the root cause, and propose a patch along with an ETA?\
 """
+st.set_page_config(page_title="Hugging Face Text Summary", page_icon="📝", layout="wide")
 
-
-st.set_page_config(page_title="Hugging Face Text Summary", layout="wide")
-
-st.title("Hugging Face Text Summary")
-st.caption("Summarize text, extract key phrases, and infer intent (zero-shot).")
+with st.container(border=True):
+    st.title("Hugging Face Text Summary")
+    st.caption("Paste text, get a summary, and a generated intent label.")
 
 with st.sidebar:
-    st.subheader("Models")
-    summary_model = st.text_input(
-        "Summarization model",
-        value=DEFAULT_SUMMARY_MODEL,
-        help="Any Hugging Face summarization model compatible with Transformers pipelines.",
-    )
-    intent_model = st.text_input(
-        "Intent model (zero-shot)",
-        value=DEFAULT_INTENT_MODEL,
-        help="A NLI/zero-shot model. Keep it small for CPU deploys.",
-    )
+    with st.expander("Models", expanded=True):
+        summary_model = st.text_input(
+            "Summarization model",
+            value=DEFAULT_SUMMARY_MODEL,
+            help="Any Hugging Face summarization model compatible with Transformers pipelines.",
+        )
+        intent_model = st.text_input(
+            "Intent model (dynamic)",
+            value=DEFAULT_DYNAMIC_INTENT_MODEL,
+            help="A text2text model that generates a short intent label from the input.",
+        )
 
-    st.subheader("Runtime")
-    device = st.selectbox(
-        "Device",
-        options=["cpu", "cuda"],
-        index=0,
-        help="Use 'cuda' only if a GPU + CUDA Torch is available.",
-    )
+    with st.expander("Runtime", expanded=True):
+        device = st.selectbox(
+            "Device",
+            options=["cpu", "cuda"],
+            index=0,
+            help="Use 'cuda' only if a GPU + CUDA Torch is available.",
+        )
 
-    st.subheader("Summary")
-    summary_min = st.slider("Min length", 10, 200, 40, step=5)
-    summary_max = st.slider("Max length", 30, 400, 160, step=10)
-    summary_refine_final = st.checkbox(
-        "Refine final summary (slower)",
-        value=True,
-        help="For long text, an extra pass improves coherence but costs time.",
-    )
+    with st.expander("Summary", expanded=True):
+        summary_min = st.slider("Min length", 10, 200, 40, step=5)
+        summary_max = st.slider("Max length", 30, 400, 160, step=10)
+        summary_refine_final = st.checkbox(
+            "Refine final summary (slower)",
+            value=True,
+            help="For long text, an extra pass improves coherence but costs time.",
+        )
 
-    st.subheader("Key phrases")
-    keyphrase_top_k = st.slider("Count", 3, 20, 10)
+    with st.expander("Intent", expanded=True):
+        enable_intent = st.checkbox(
+            "Enable intent",
+            value=True,
+            help="Generates a short intent label from the input.",
+        )
 
-    st.subheader("Intent")
-    enable_intent = st.checkbox(
-        "Enable intent detection (slower)",
-        value=True,
-        help="Zero-shot intent is usually the slowest step on CPU.",
-    )
-    intent_labels_text = st.text_area(
-        "Candidate intents (one per line)",
-        value="\n".join(DEFAULT_INTENT_LABELS),
-        height=180,
-    )
-    intent_top_k = st.slider("Top-K intents", 1, 5, 3)
+    st.caption("Models are downloaded once and cached locally by Transformers.")
 
-    run = st.button("Analyze", type="primary", use_container_width=True)
+run = False
 
 col_left, col_right = st.columns([3, 2], gap="large")
 
 with col_left:
-    st.subheader("Input")
-    text = st.text_area(
-        "Text",
-        value=SAMPLE_TEXT,
-        height=260,
-        placeholder="Paste text to summarize...",
-        label_visibility="collapsed",
-    )
+    if "input_text" not in st.session_state:
+        st.session_state["input_text"] = SAMPLE_TEXT
+
+    with st.container(border=True):
+        st.subheader("Input")
+        with st.form("analyze_form", border=False):
+            text = st.text_area(
+                "Text",
+                height=280,
+                placeholder="Paste text to summarize...",
+                label_visibility="collapsed",
+                key="input_text",
+            )
+            run = st.form_submit_button("Analyze", type="primary", use_container_width=True)
 
 with col_right:
-    st.subheader("Tips")
-    st.write(
-        "- For long inputs, the app uses a chunked (map-reduce) summary.\n"
-        "- Change intent labels to fit your domain.\n"
-        "- First run downloads models into your Hugging Face cache."
-    )
+    with st.container(border=True):
+        st.subheader("How it works")
+        st.markdown(
+            "\n".join(
+                [
+                    "- Long inputs use a chunked (map-reduce) summarization.",
+                    "- Intent is generated from the input (no label list needed).",
+                    "- First run downloads models into your Hugging Face cache.",
+                ]
+            )
+        )
 
 if run:
     cleaned = (text or "").strip()
-    labels: List[str] = [
-        line.strip() for line in (intent_labels_text or "").splitlines() if line.strip()
-    ]
+    labels: List[str] = []
 
     if not cleaned:
         st.warning("Please enter some text.")
@@ -155,45 +151,53 @@ if run:
             summary_min_length=summary_min,
             summary_max_length=summary_max,
             summary_refine_final=summary_refine_final,
-            keyphrase_top_k=keyphrase_top_k,
+            keyphrase_top_k=0,
             enable_intent=enable_intent,
             intent_labels=labels,
-            intent_top_k=intent_top_k,
+            intent_top_k=1,
+            intent_mode="generate",
         )
 
     st.divider()
 
-    out_left, out_right = st.columns([3, 2], gap="large")
+    tab_synopsis, tab_meta = st.tabs(["Synopsis", "Metadata"])
 
-    with out_left:
-        st.subheader("Summary")
+    with tab_synopsis:
         if result.summary:
-            st.write(result.summary)
-        else:
-            st.info("No summary produced (input may be too short).")
+            with st.container(border=True):
+                st.subheader("Synopsis")
+                st.markdown(f"**{result.summary}**")
 
-    with out_right:
-        st.subheader("Key phrases")
-        if result.key_phrases:
-            for p in result.key_phrases:
-                st.markdown(f"- {p}")
-        else:
-            st.info("No key phrases extracted.")
+                st.divider()
+                st.subheader("Intent")
+                if result.intent_top:
+                    st.markdown(f"**{result.intent_top.label}**")
+                    if result.intent_top.score is not None:
+                        st.metric("Confidence", f"{result.intent_top.score:.3f}")
+                else:
+                    st.info("No intent prediction.")
 
-        st.subheader("Intent")
-        if result.intent_top:
-            st.markdown(
-                f"**Top:** {result.intent_top.label}  \\nScore: `{result.intent_top.score:.3f}`"
-            )
-            if result.intent_top_k:
-                st.caption("Top-K")
-                for pred in result.intent_top_k:
-                    st.markdown(f"- {pred.label}: `{pred.score:.3f}`")
-        else:
-            st.info("No intent prediction (check intent labels).")
+                intent_meta = (result.meta or {}).get("intent") if isinstance(result.meta, dict) else None
+                if isinstance(intent_meta, dict):
+                    model = intent_meta.get("model")
+                    mode = intent_meta.get("mode")
+                    meta_bits = [f"mode: {mode}" if mode else None, f"model: {model}" if model else None]
+                    meta_bits = [b for b in meta_bits if b]
+                    if meta_bits:
+                        st.caption(" · ".join(meta_bits))
 
-    with st.expander("Metadata", expanded=False):
+            sum_meta = (result.meta or {}).get("summary") if isinstance(result.meta, dict) else None
+            if isinstance(sum_meta, dict):
+                model = sum_meta.get("model")
+                meta_bits = [f"model: {model}" if model else None]
+                meta_bits = [b for b in meta_bits if b]
+                if meta_bits:
+                    st.caption(" · ".join(meta_bits))
+        else:
+            st.info("No synopsis produced (input may be too short).")
+
+    with tab_meta:
         st.json(result.meta)
 
 else:
-    st.info("Click **Analyze** to generate a summary.")
+    st.info("Paste some text and click **Analyze**.")

@@ -2,8 +2,8 @@
 
 A small, deployable Streamlit app that:
 - Summarizes text using a Hugging Face Transformers model
-- Extracts key phrases (YAKE)
-- Infers intent via zero-shot classification
+- Produces a short list of key phrases/topics
+- Infers intent by generating a short label from the text
 
 ## Quickstart
 
@@ -48,8 +48,10 @@ Then open http://localhost:8501
 ## Notes
 
 - Default summarization model: `sshleifer/distilbart-cnn-12-6` (CPU-friendly)
-- Default intent model: `valhalla/distilbart-mnli-12-1`
+- Default intent model: `google/flan-t5-small`
 - For long text, the summarizer uses a chunked (map-reduce) strategy.
+
+UI theming is configured via `.streamlit/config.toml`.
 
 If deployment environments are resource-constrained, consider switching to smaller models in the sidebar.
 
