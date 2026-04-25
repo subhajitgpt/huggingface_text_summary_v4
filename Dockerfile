@@ -24,6 +24,8 @@ RUN apt-get update \
         libxml2-dev \
         libxslt1-dev \
         zlib1g-dev \
+        tesseract-ocr \
+        tesseract-ocr-eng \
     ; rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md /app/
@@ -32,7 +34,8 @@ COPY app.py /app/app.py
 
 RUN pip install --upgrade pip setuptools wheel \
     ; pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu "torch>=2.1" \
-    ; pip install --no-cache-dir .
+    ; pip install --no-cache-dir ".[ocr]" \
+    ; python -c "import pypdf, docx; print('deps-ok')"
 
 EXPOSE 8501
 
