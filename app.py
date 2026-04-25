@@ -42,6 +42,7 @@ try:
         DEFAULT_DYNAMIC_INTENT_MODEL,
         DEFAULT_SUMMARY_MODEL,
     )
+    from hf_text_summary.text_extract import extract_text_from_bytes
 except ModuleNotFoundError:
     # Allows `streamlit run app.py` without requiring an editable install.
     import sys
@@ -52,6 +53,7 @@ except ModuleNotFoundError:
         DEFAULT_DYNAMIC_INTENT_MODEL,
         DEFAULT_SUMMARY_MODEL,
     )
+    from hf_text_summary.text_extract import extract_text_from_bytes
 
 
 SAMPLE_TEXT = """\
@@ -121,9 +123,29 @@ with col_left:
     if "input_text" not in st.session_state:
         st.session_state["input_text"] = SAMPLE_TEXT
 
+    if "input_mode" not in st.session_state:
+        st.session_state["input_mode"] = "Text"
+
     with st.container(border=True):
         st.subheader("Input")
-        with st.form("analyze_form", border=False):
+        input_mode = st.radio(
+            "Input mode",
+            options=["Text", "File"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="input_mode",
+        )
+
+        if input_mode == "File":
+            st.file_uploader(
+                "Upload a file",
+                type=["pdf", "docx", "txt", "md", "doc"],
+                help="Supported: PDF, DOCX, TXT/MD. Note: scanned/image-only PDFs may have no extractable text unless OCR is enabled (optional). Legacy .doc is not supported; upload .docx or PDF.",
+                key="uploaded_file",
+            )
+            # Keep the text box available as a fallback / preview.
+            text = ""
+        else:
             text = st.text_area(
                 "Text",
                 height=280,
@@ -131,7 +153,8 @@ with col_left:
                 label_visibility="collapsed",
                 key="input_text",
             )
-            run = st.form_submit_button("Analyze", type="primary", use_container_width=True)
+
+        run = st.button("Analyze", type="primary", use_container_width=True)
 
 with col_right:
     with st.container(border=True):
@@ -150,8 +173,21 @@ if run:
     cleaned = (text or "").strip()
     labels: List[str] = []
 
+    # If a file was uploaded, prefer its extracted text.
+    if st.session_state.get("input_mode") == "File":
+        uploaded_now = st.session_state.get("uploaded_file")
+        if uploaded_now is not None:
+            try:
+                cleaned = extract_text_from_bytes(uploaded_now.name, uploaded_now.getvalue()).strip()
+            except Exception as e:
+                st.error(f"Failed to read uploaded file: {e}")
+                st.stop()
+        else:
+            st.warning("Please upload a file.")
+            st.stop()
+
     if not cleaned:
-        st.warning("Please enter some text.")
+        st.warning("Please enter some text." if st.session_state.get("input_mode") != "File" else "The uploaded file contained no extractable text.")
         st.stop()
 
     if summary_max <= summary_min:

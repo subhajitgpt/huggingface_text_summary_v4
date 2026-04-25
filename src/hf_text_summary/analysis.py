@@ -577,7 +577,7 @@ def generate_intent(
 
     device = _normalize_device(device)
 
-    text_snippet = text[:2000]
+    text_snippet = _sample_text_for_prompt(text, max_chars=2000)
     prompt = (
         "Return a short intent label (2-6 words) describing what the user wants. "
         "Do not return a sentence.\n\n"
@@ -669,6 +669,22 @@ def _has_high_overlap(generated: str, source: str, *, ngram: int = 6) -> bool:
     return False
 
 
+def _sample_text_for_prompt(text: str, *, max_chars: int) -> str:
+    """Take a representative slice of long text for prompt-based generation."""
+
+    text = (text or "").strip()
+    max_chars = int(max_chars)
+    if max_chars <= 0:
+        return ""
+    if len(text) <= max_chars:
+        return text
+
+    # Bias toward the beginning (context) but keep the end (often contains ask/summary).
+    head = max(200, int(max_chars * 0.6))
+    tail = max(200, max_chars - head)
+    return (text[:head].rstrip() + "\n\n…\n\n" + text[-tail:].lstrip()).strip()
+
+
 def generate_synopsis_and_keyphrases(
     text: str,
     *,
@@ -689,7 +705,7 @@ def generate_synopsis_and_keyphrases(
     requested_k = int(top_k or 0)
     requested_k = max(0, min(requested_k, 20))
 
-    text_snippet = text[:2000]
+    text_snippet = _sample_text_for_prompt(text, max_chars=2000)
     summary_snippet = base_summary[:1200] if base_summary else ""
 
     if requested_k > 0:

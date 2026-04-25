@@ -8,13 +8,13 @@ from hf_text_summary.analysis import (
     DEFAULT_SUMMARY_MODEL,
     analyze_text,
 )
+from hf_text_summary.text_extract import extract_text_from_path
 
 
 def _read_text(path: str | None) -> str:
     if not path or path == "-":
         return sys.stdin.read()
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+    return extract_text_from_path(path)
 
 
 def main(argv: list[str] | None = None) -> int:

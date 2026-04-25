@@ -16,6 +16,8 @@ from .analysis import (
     summarize_text,
 )
 
+from .text_extract import extract_text_from_bytes, extract_text_from_path, supported_extensions
+
 __all__ = [
     "DEFAULT_INTENT_MODEL",
     "DEFAULT_DYNAMIC_INTENT_MODEL",
@@ -27,4 +29,7 @@ __all__ = [
     "detect_intent",
     "generate_intent",
     "analyze_text",
+    "extract_text_from_bytes",
+    "extract_text_from_path",
+    "supported_extensions",
 ]
